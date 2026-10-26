@@ -37,12 +37,12 @@ function loadImage(dataUrl: string): Promise<HTMLImageElement> {
   })
 }
 
-interface TextLine {
+export interface TextLine {
   text: string
   bbox: { x0: number; y0: number; x1: number; y1: number }
 }
 
-function extractLines(data: unknown): TextLine[] {
+export function extractLines(data: unknown): TextLine[] {
   if (!data || typeof data !== 'object') return []
   const page = data as {
     blocks?: unknown
@@ -76,6 +76,11 @@ function isTextLine(line: unknown): line is TextLine {
   )
 }
 
+export async function createLocalOcrWorker() {
+  const { createWorker } = await import('tesseract.js')
+  return createWorker(['slv', 'eng'])
+}
+
 /**
  * Runs a local OCR pass (in the browser) to find personal-data labels and
  * paints over those areas, so the image sent to the AI API contains no
@@ -83,8 +88,7 @@ function isTextLine(line: unknown): line is TextLine {
  * except the anonymized JPEG.
  */
 export async function anonymizeDataUrl(dataUrl: string): Promise<AnonymizeResult> {
-  const { createWorker } = await import('tesseract.js')
-  const worker = await createWorker(['slv', 'eng'])
+  const worker = await createLocalOcrWorker()
   let ocrText: { data: unknown }
   try {
     ocrText = await worker.recognize(dataUrl, {}, { blocks: true, text: true })

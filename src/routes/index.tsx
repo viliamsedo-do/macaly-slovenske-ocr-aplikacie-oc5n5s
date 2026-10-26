@@ -6,6 +6,7 @@ import { canonicalUrl } from '../lib/canonical-url'
 import siteMetadata from '../metadata.json'
 import { fileToJpegBase64, fileToJpegDataUrl, pdfToJpegPages, type PdfPage } from '../lib/ocr-image'
 import { anonymizeDataUrl, type AnonymizeResult } from '../lib/anonymize'
+import { ocrOfflineDataUrl } from '../lib/offline-ocr'
 
 const homepageMeta = siteMetadata['/']
 
@@ -98,6 +99,7 @@ function App() {
   const [imagePreview, setImagePreview] = useState<string | null>(null)
   const [pdfPages, setPdfPages] = useState<PdfPage[]>([])
   const [dragging, setDragging] = useState(false)
+  const [engine, setEngine] = useState<'online' | 'offline'>('online')
   const [anonymizeOn, setAnonymizeOn] = useState(false)
   const [anonymizing, setAnonymizing] = useState(false)
   const [maskedZones, setMaskedZones] = useState<string[]>([])
@@ -201,8 +203,23 @@ function App() {
       }
 
       const outputs: OcrResult[] = []
-      for (const page of sendPages) {
-        outputs.push((await ocrDocument(page)) as OcrResult)
+      if (engine === 'offline') {
+        for (const page of sendPages) {
+          const fields = await ocrOfflineDataUrl(
+            `data:${page.mediaType};base64,${page.imageBase64}`,
+            anonymizeOn,
+          )
+          outputs.push({
+            documentType: 'Osvedčenie o evidencii vozidla (lokálne OCR)',
+            fields,
+            notes: 'Čítané lokálne v prehliadači, bez odoslania do AI.',
+            rawText: '',
+          })
+        }
+      } else {
+        for (const page of sendPages) {
+          outputs.push((await ocrDocument(page)) as OcrResult)
+        }
       }
 
       const first = outputs[0]
@@ -322,6 +339,45 @@ function App() {
         </header>
 
         <main data-testid="ocr-app" data-state={busy ? 'loading' : status}>
+          <div
+            className="mb-4 flex flex-wrap items-center gap-2 rounded-lg border border-line bg-surface px-4 py-3"
+            role="radiogroup"
+            aria-label="Spôsob čítania"
+          >
+            <span className="text-sm font-medium text-sea-ink">Spôsob čítania:</span>
+            <button
+              type="button"
+              data-testid="mode-online"
+              onClick={() => setEngine('online')}
+              aria-pressed={engine === 'online'}
+              className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                engine === 'online'
+                  ? 'bg-sea-ink text-foam'
+                  : 'border border-line text-sea-ink-soft hover:bg-foam'
+              }`}
+            >
+              AI (online)
+            </button>
+            <button
+              type="button"
+              data-testid="mode-offline"
+              onClick={() => setEngine('offline')}
+              aria-pressed={engine === 'offline'}
+              className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                engine === 'offline'
+                  ? 'bg-sea-ink text-foam'
+                  : 'border border-line text-sea-ink-soft hover:bg-foam'
+              }`}
+            >
+              Lokálne (offline)
+            </button>
+            {engine === 'offline' && (
+              <span className="text-xs text-sea-ink-soft">
+                Beží v prehliadači, žiadne dáta sa neodosielajú. Prvé čítanie
+                stiahne jazykové dáta, potom funguje aj bez internetu.
+              </span>
+            )}
+          </div>
           <label className="mb-4 flex items-start gap-3 rounded-lg border border-line bg-surface px-4 py-3 text-sm">
             <input
               type="checkbox"
